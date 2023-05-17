@@ -12,27 +12,40 @@ CREATE TABLE IF NOT EXISTS apps_metadata
     filename text
 )
 """
-INSERT_METADATA_TABLE_STATEMENT = """
-INSERT INTO apps_metadata VALUES({app_type}, {table_name}, {filename})
+REPLACE_METADATA_TABLE_STATEMENT = """
+REPLACE INTO apps_metadata (app_type, table_name, filename)
+VALUES ('{app_type}', '{table_name}', '{filename}')
+"""
+SELECT_METADATA_TABLE_STATEMENT = """
+SELECT app_type, filename FROM apps_metadata
 """
 
+# TODO
 CREATE_APP_STORE_APPS_TABLE_STATEMENT = """
 CREATE TABLE IF NOT EXISTS app_store_apps_table
 ( PRIMARY KEY,
 )
 """
+app_store_column_mapper = {
+
+}
 
 CREATE_GOOGLE_PLAY_APPS_TABLE_STATEMENT = """
 CREATE TABLE IF NOT EXISTS google_play_apps_table
 ( PRIMARY KEY,
 )
 """
+google_play_column_mapper = {
+
+}
 
 
 class AppDbManager:
     def __init__(self, app_store_file=DEFAULT_APP_STORE_FILENAME, google_play_file=DEFAULT_GOOGLE_PLAY_FILENAME):
+        self.conn = sqlite3.connect(f'./{DB_NAME}')
+        self.cur = self.conn.cursor()
         self.__init_metadata__()
-        # self.__init_app_data__(app_store_file, google_play_file)
+        self.__init_app_data__(app_store_file, google_play_file)
 
     def __exit__(self, ext_type, exc_value, traceback):
         self.cur.close()
@@ -43,33 +56,38 @@ class AppDbManager:
         self.conn.close()
 
     def __init_metadata__(self):
-        self.conn = sqlite3.connect(f'./{DB_NAME}')
-        self.cur = self.conn.cursor()
         # create table metatable
         self.cur.execute(CREATE_METADATA_TABLE_STATEMENT)
         self.conn.commit()
 
-    # def __init_app_data__(self, app_store_file, google_play_file):
-    #     # check metadata
-    #     apps_metadata_stored = self.cur.execute("SELECT app_type, filename FROM apps_metadata")
-    #     store = dict()
-    #     for row in apps_metadata_stored:
-    #         store[row[0]] = row[1]
-    #     print(store)
-    #     # load data if empty or inconsistent
-    #     # metadata list local
-    #     # apps_metadata_local = [
-    #     #     ('app_store', 'app_store_apps_table', self.app_store)
-    #     # ]
-    #     self.cur.execute(INSERT_METADATA_TABLE_STATEMENT.format(
-    #         app_type='app_store', table_name='app_store_apps_table', filename=app_store_file)
-    #     )
-    #     self.cur.execute(INSERT_METADATA_TABLE_STATEMENT.format(
-    #         app_type='google_play', table_name='google_play_apps_table', filename=google_play_file)
-    #     )
-    #     self.conn.commit()
-    #     # self.cur.execute(CREATE_APP_STORE_APPS_TABLE_STATEMENT)
-    #     # self.cur.execute(CREATE_GOOGLE_PLAY_APPS_TABLE_STATEMENT)
+    def __init_app_data__(self, app_store_file, google_play_file):
+        # check metadata
+        apps_metadata_stored = self.cur.execute(SELECT_METADATA_TABLE_STATEMENT)
+        store = dict()
+        for row in apps_metadata_stored:
+            store[row[0]] = row[1]
+        if 'app_store' not in store or store['app_store'] != app_store_file:
+            self.load_data('app_store', app_store_file)
+        if 'google_play' not in store or store['google_play'] != google_play_file:
+            self.load_data('google_play', google_play_file)
+
+    def load_data(self, app_type, filename):
+        # load data and update metadata
+        if app_type == 'app_store':
+            table_sql = CREATE_APP_STORE_APPS_TABLE_STATEMENT
+            table_column_mapper = app_store_column_mapper
+        elif app_type == 'google_play':
+            table_sql = CREATE_APP_STORE_APPS_TABLE_STATEMENT
+            table_column_mapper = google_play_column_mapper
+        # read files and insert
+        
+        # update metadata
+        self.cur.execute(REPLACE_METADATA_TABLE_STATEMENT.format(
+            app_type=app_type, table_name=f'{app_type}_apps_table', filename=filename)
+        )
+        self.conn.commit()
+        # self.cur.execute(CREATE_APP_STORE_APPS_TABLE_STATEMENT)
+        # self.cur.execute(CREATE_GOOGLE_PLAY_APPS_TABLE_STATEMENT)
 
 
 if __name__ == '__main__':
