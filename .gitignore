@@ -1,3 +1,11 @@
+# project specific files
+appleAppData.csv
+Google-Playstore.csv
+app_db.db
+
+# pycharm
+.idea
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
