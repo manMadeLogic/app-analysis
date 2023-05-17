@@ -1,7 +1,6 @@
 import argparse
-import csv
-import dateparser
 import sqlite3
+import subprocess
 
 DB_NAME = "app_db.db"
 DEFAULT_APP_STORE_FILENAME = "appleAppData.csv"
@@ -34,47 +33,133 @@ CREATE TABLE IF NOT EXISTS {table_name}
     rating_count int
 )
 """
-INSERT_APP_TABLE_STATEMENT = """
-INSERT INTO {table_name}
+
+CREATE_APP_STORE_STAGING_STATEMENT = """
+CREATE TABLE IF NOT EXISTS app_store_staging
+(
+    app_id text PRIMARY KEY,
+    app_name text,
+    appStore_url text,
+    primary_genre text,
+    content_rating text,
+    size_bytes int,
+    required_ios_version text,
+    released text,
+    updated text,
+    version text,
+    price text,
+    currency text,
+    free int,
+    developerid text,
+    developer text,
+    developer_url text,
+    developer_website text,
+    average_user_rating real,
+    reviews int
+)
+"""
+CREATE_GOOGLE_PLAY_STAGING_STATEMENT = """
+CREATE TABLE IF NOT EXISTS google_play_staging
+(
+    app_name text,
+    app_id text PRIMARY KEY,
+    category text,
+    rating real,
+    rating_count int,
+    installs int,
+    minimum_installs int,
+    maximum_installs int,
+    free int,
+    price real,
+    currency text,
+    size text,
+    minimum_android text,
+    developer_d text,
+    developer_website text,
+    developer_email text,
+    released text
+)
+"""
+INSERT_APP_STORE_APP_TABLE_STATEMENT = """
+INSERT INTO app_store_apps_table
 (app_id, app_name, category, size_in_mb, released_date, rating, rating_count) 
-VALUES (?, ?, ?, ?, ?, ?, ?)
+SELECT
+    app_id,
+    app_name,
+    primary_genre AS category,
+    size_bytes * 1.0 / 1024 / 1024 AS size_in_mb,
+    SUBSTR(released, 1, 10) AS released_date,
+    average_user_rating AS rating,
+    reviews AS rating_count
+FROM app_store_staging
+"""
+INSERT_GOOGLE_PLAY_APP_TABLE_STATEMENT = """
+INSERT INTO google_play_apps_table
+(app_id, app_name, category, size_in_mb, released_date, rating, rating_count) 
+SELECT
+    app_id,
+    app_name,
+    category,
+    CASE
+        WHEN size IN ('Varies with device', '') THEN NULL
+        WHEN SUBSTR(size, -1) = 'k' THEN CAST(REPLACE(SUBSTR(size, 1, LENGTH(size)-1), ',', '') AS REAL) / 1024
+        WHEN SUBSTR(size, -1) = 'M' THEN CAST(REPLACE(SUBSTR(size, 1, LENGTH(size)-1), ',', '') AS REAL)
+        WHEN SUBSTR(size, -1) = 'G' THEN CAST(REPLACE(SUBSTR(size, 1, LENGTH(size)-1), ',', '') AS REAL) * 1024
+    END AS size_in_mb,
+    SUBSTR(released,-4) || '-' ||
+      CASE SUBSTR(released, 1, 3)
+         WHEN 'Jan' THEN '01'
+         WHEN 'Feb' THEN '02'
+         WHEN 'Mar' THEN '03'
+         WHEN 'Apr' THEN '04'
+         WHEN 'May' THEN '05'
+         WHEN 'Jun' THEN '06'
+         WHEN 'Jul' THEN '07'
+         WHEN 'Aug' THEN '08'
+         WHEN 'Sep' THEN '09'
+         WHEN 'Oct' THEN '10'
+         WHEN 'Nov' THEN '11'
+         WHEN 'Dec' THEN '12'
+      END || '-' ||
+      CASE 
+         WHEN LENGTH(released) = 12 THEN SUBSTR(released, 5, 2)
+         WHEN LENGTH(released) = 11 THEN '0' || SUBSTR(released, 5, 1)
+      END
+    AS released_date,
+    rating,
+    rating_count
+FROM google_play_staging
 """
 
-
-def modify_app_store_row(row):
-    return (
-        row['App_Id'],
-        row['App_Name'],
-        row['Primary_Genre'],
-        int(row['Size_Bytes']) / 1024 / 1024 if row['Size_Bytes'] else None,
-        row['Released'][:10],
-        float(row['Average_User_Rating']),
-        int(row['Reviews']),
-    )
-
-
-def modify_google_play_row(row):
-    size = None
-    if row['Size'] == 'Varies with device' or not row['Size']:
-        size = None
-    elif row['Size'][-1] == 'k':
-        size = float(row['Size'][:-1].replace(',', '')) / 1024
-    elif row['Size'][-1] == 'M':
-        size = float(row['Size'][:-1].replace(',', ''))
-    elif row['Size'][-1] == 'G':
-        size = float(row['Size'][:-1].replace(',', '')) * 1024
-    else:
-        print(row['Size'])
-
-    return (
-        row['App Id'],
-        row['App Name'],
-        row['Category'],
-        size,
-        dateparser.parse(row['Released']).strftime('%Y-%m-%d') if row['Released'] else None,
-        float(row['Rating']) if row['Rating Count'] and row['Rating'] else 0,
-        int(row['Rating Count']) if row['Rating Count'] and row['Rating'] else 0,
-    )
+# Game, Music, or Health
+APP_STORE_CATEGORY_CASE_STATEMENT = """
+CASE
+    WHEN category = 'Games' THEN 'Game'
+    WHEN category = 'Music' THEN 'Music'
+    WHEN category = 'Health & Fitness' THEN 'Health'
+END AS category
+"""
+APP_STORE_CATEGORY_FILTER_STATEMENT = """
+category IN ('Games', 'Music', 'Health & Fitness')
+"""
+GOOGLE_PLAY_CATEGORY_CASE_STATEMENT = """
+CASE
+    WHEN category IN ('Games', 'Action', 'Adventure', 'Arcade',
+                      'Board', 'Card', 'Casino, Casual',
+                      'Educational', 'Music', 'Puzzle', 'Racing',
+                      'Role Playing', 'Simulation', 'Sports',
+                      'Strategy', 'Trivia', 'Word') THEN 'Game'
+    WHEN category = 'Music & Audio' THEN 'Music'
+    WHEN category = 'Health & Fitness' THEN 'Health'
+END AS category
+"""
+GOOGLE_PLAY_CATEGORY_FILTER_STATEMENT = """
+category IN ('Games', 'Action', 'Adventure', 'Arcade',
+                      'Board', 'Card', 'Casino, Casual',
+                      'Educational', 'Music', 'Puzzle', 'Racing',
+                      'Role Playing', 'Simulation', 'Sports',
+                      'Strategy', 'Trivia', 'Word', 'Music & Audio', 'Health & Fitness')
+"""
 
 
 class AppDbManager:
@@ -84,7 +169,7 @@ class AppDbManager:
                  google_play_file=DEFAULT_GOOGLE_PLAY_FILENAME
                  ):
         print(f"__init__ function with app_store_file={app_store_file}, google_play_file={google_play_file}")
-        self.conn = sqlite3.connect(f'./{DB_NAME}')
+        self.conn = sqlite3.connect(DB_NAME)
         self.cur = self.conn.cursor()
         self.__init_metadata__()
         if not no_load:
@@ -112,40 +197,44 @@ class AppDbManager:
             store[row[0]] = row[1]
         # update if different
         if 'app_store' not in store or store['app_store'] != app_store_file:
-            column_modifier = modify_app_store_row
-            self.load_data('app_store', column_modifier, app_store_file)
+            self.load_data('app_store', app_store_file)
         if 'google_play' not in store or store['google_play'] != google_play_file:
-            column_modifier = modify_google_play_row
-            self.load_data('google_play', column_modifier, google_play_file)
-
-    def __load_file__(self, table_name, column_modifier, filename):
-        print(f"__load_file__ for {table_name} with filename: {filename}")
-        # create table if exist
-        self.cur.execute(CREATE_APPS_TABLE_STATEMENT.format(table_name=table_name))
-
-        # delete table
-        self.cur.execute(f"DELETE FROM {table_name}")
-
-        # read files
-        with open(filename, 'r') as f:
-            # csv.DictReader uses first line in file for column headings by default
-            dr = csv.DictReader(f)
-            store = [column_modifier(r) for r in dr]
-
-        # insert
-        print("insert")
-        self.cur.executemany(INSERT_APP_TABLE_STATEMENT.format(table_name=table_name), store)
-        self.conn.commit()
+            self.load_data('google_play', google_play_file)
 
     # load data and update metadata
-    def load_data(self, app_type, column_modifier, filename):
+    def load_data(self, app_type, filename):
         # read files and insert
-        self.__load_file__(f'{app_type}_apps_table', column_modifier, filename)
+        self.__load_file__(app_type, filename)
 
         # update metadata
         self.cur.execute(REPLACE_METADATA_TABLE_STATEMENT.format(
             app_type=app_type, table_name=f'{app_type}_apps_table', filename=filename)
         )
+        self.conn.commit()
+
+    def __load_file__(self, app_type, filename):
+        print(f"__load_file__ function with app_type={app_type} and filename={filename}")
+        self.cur.execute(CREATE_APPS_TABLE_STATEMENT.format(table_name=f"{app_type}_apps_table"))
+        # create staging table
+        if app_type == 'app_store':
+            self.cur.execute(CREATE_APP_STORE_STAGING_STATEMENT)
+        elif app_type == 'google_play':
+            self.cur.execute(CREATE_GOOGLE_PLAY_STAGING_STATEMENT)
+
+        # load data to staging table
+        subprocess.run(
+            ['sqlite3', 'app_db.db', '-cmd', f'.import --csv --skip 1 {filename} {app_type}_staging', '.quit'],
+            capture_output=True)
+
+        # delete the final table and insert staging to the final table
+        self.cur.execute(f"DELETE FROM {app_type}_apps_table")
+        if app_type == 'app_store':
+            self.cur.execute(INSERT_APP_STORE_APP_TABLE_STATEMENT)
+        elif app_type == 'google_play':
+            self.cur.execute(INSERT_GOOGLE_PLAY_APP_TABLE_STATEMENT)
+
+        # drop the staging table
+        self.cur.execute(f"DROP TABLE {app_type}_staging")
         self.conn.commit()
 
     def run_select(self, query):

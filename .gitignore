@@ -3,6 +3,9 @@ appleAppData*.csv
 Google-Playstore*.csv
 app_db.db
 
+# notebook
+.ipynb_checkpoints/*
+
 # pycharm
 .idea
 
