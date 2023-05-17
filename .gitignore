@@ -1,6 +1,6 @@
 # project specific files
-appleAppData.csv
-Google-Playstore.csv
+appleAppData*.csv
+Google-Playstore*.csv
 app_db.db
 
 # pycharm

@@ -10,3 +10,8 @@ files:
 2. run `python3 create_table.py`. It will create an app_db.db file under app-analysis folder
 3. run `python3 load_data.py`. It will load both csv files to xxx and xxx tables. 
 4. jupyter notebook
+
+design choices:
+1. single table vs individual tables 
+2. same schema vs different schemas
+3. pre-process the genre vs store original and modify it later
