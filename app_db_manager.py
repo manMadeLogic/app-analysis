@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS {table_name}
     rating_count int
 )
 """
-
 CREATE_APP_STORE_STAGING_STATEMENT = """
 CREATE TABLE IF NOT EXISTS app_store_staging
 (
@@ -43,7 +42,7 @@ CREATE TABLE IF NOT EXISTS app_store_staging
     appStore_url text,
     primary_genre text,
     content_rating text,
-    size_bytes int,
+    size_bytes bigint,
     required_ios_version text,
     released text,
     updated text,
@@ -133,36 +132,6 @@ SELECT
     rating,
     rating_count
 FROM google_play_staging
-"""
-
-# Game, Music, or Health
-APP_STORE_CATEGORY_CASE_STATEMENT = """
-CASE
-    WHEN category = 'Games' THEN 'Game'
-    WHEN category = 'Music' THEN 'Music'
-    WHEN category = 'Health & Fitness' THEN 'Health'
-END
-"""
-APP_STORE_CATEGORY_FILTER_STATEMENT = """
-category IN ('Games', 'Music', 'Health & Fitness')
-"""
-GOOGLE_PLAY_CATEGORY_CASE_STATEMENT = """
-CASE
-    WHEN category IN ('Games', 'Action', 'Adventure', 'Arcade',
-                      'Board', 'Card', 'Casino, Casual',
-                      'Educational', 'Music', 'Puzzle', 'Racing',
-                      'Role Playing', 'Simulation', 'Sports',
-                      'Strategy', 'Trivia', 'Word') THEN 'Game'
-    WHEN category = 'Music & Audio' THEN 'Music'
-    WHEN category = 'Health & Fitness' THEN 'Health'
-END
-"""
-GOOGLE_PLAY_CATEGORY_FILTER_STATEMENT = """
-category IN ('Games', 'Action', 'Adventure', 'Arcade',
-                      'Board', 'Card', 'Casino, Casual',
-                      'Educational', 'Music', 'Puzzle', 'Racing',
-                      'Role Playing', 'Simulation', 'Sports',
-                      'Strategy', 'Trivia', 'Word', 'Music & Audio', 'Health & Fitness')
 """
 
 
