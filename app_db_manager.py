@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 import sqlite3
 import subprocess
 
@@ -16,7 +17,7 @@ CREATE TABLE IF NOT EXISTS apps_metadata
 REPLACE_METADATA_TABLE_STATEMENT = """
 REPLACE INTO apps_metadata (app_type, table_name, filename)
 VALUES ('{app_type}', '{table_name}', '{filename}')
-"""  # todo
+"""
 SELECT_METADATA_TABLE_STATEMENT = """
 SELECT app_type, filename FROM apps_metadata
 """
@@ -88,7 +89,10 @@ SELECT
     app_name,
     primary_genre AS category,
     size_bytes * 1.0 / 1024 / 1024 AS size_in_mb,
-    SUBSTR(released, 1, 10) AS released_date,
+    CASE
+        WHEN released = '' THEN NULL
+        ELSE SUBSTR(released, 1, 10)
+    END AS released_date,
     average_user_rating AS rating,
     reviews AS rating_count
 FROM app_store_staging
@@ -137,7 +141,7 @@ CASE
     WHEN category = 'Games' THEN 'Game'
     WHEN category = 'Music' THEN 'Music'
     WHEN category = 'Health & Fitness' THEN 'Health'
-END AS category
+END
 """
 APP_STORE_CATEGORY_FILTER_STATEMENT = """
 category IN ('Games', 'Music', 'Health & Fitness')
@@ -151,7 +155,7 @@ CASE
                       'Strategy', 'Trivia', 'Word') THEN 'Game'
     WHEN category = 'Music & Audio' THEN 'Music'
     WHEN category = 'Health & Fitness' THEN 'Health'
-END AS category
+END
 """
 GOOGLE_PLAY_CATEGORY_FILTER_STATEMENT = """
 category IN ('Games', 'Action', 'Adventure', 'Arcade',
@@ -240,6 +244,9 @@ class AppDbManager:
     def run_select(self, query):
         result = self.conn.execute(query)
         return list(result)
+
+    def run_select_pd(self, query):
+        return pd.read_sql_query(query, self.conn)
 
 
 if __name__ == '__main__':
